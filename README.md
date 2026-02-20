@@ -1,5 +1,7 @@
 # Workstation Benchmark Report
 
+
+
 **Date:** 20-02-2026
 **System:** Intel Core i7-12700F / AMD Radeon RX 7700 XT / 64 GB DDR5 / Ubuntu 25.10
 
@@ -107,6 +109,74 @@ The sustained scrub rate of ~135 MiB/s represents real physical read throughput 
 
 Top scenes: texture 13,361 FPS, build (VBO) 12,409 FPS, shading 12,353 FPS.
 
+### GPU Compute (ROCm 6.4.0)
+
+ROCm compute benchmarks using PyTorch 2.9.1+rocm6.3 on the AMD Radeon RX 7700 XT (gfx1101, 54 CUs / 27 WGPs, 12 GB GDDR6, 192-bit bus).
+
+![ROCm Compute Summary](charts/rocm-summary.png)
+
+#### GEMM Throughput (Matrix Multiply)
+
+![GEMM Throughput](charts/rocm-gemm.png)
+
+| Size | FP32 (TFLOPS) | FP16 (TFLOPS) |
+|------|---------------|---------------|
+| 1024x1024 | 8.17 | 32.63 |
+| 2048x2048 | 8.20 | 47.65 |
+| 4096x4096 | 8.92 | 48.53 |
+| 8192x8192 | 8.41 | 48.78 |
+
+Peak observed: **8.9 TFLOPS FP32**, **48.8 TFLOPS FP16**. The ~5.5x FP16/FP32 ratio reflects RDNA 3's packed FP16 execution (2x rate) combined with reduced memory pressure.
+
+#### ResNet-50 Inference
+
+![ResNet-50 Inference](charts/rocm-resnet50.png)
+
+| Batch Size | FP32 (img/s) | FP16 (img/s) |
+|------------|-------------|-------------|
+| 1 | 264 | 353 |
+| 8 | 782 | 1,554 |
+| 32 | 726 | 1,668 |
+
+#### Transformer Layer (Single Layer Forward Pass)
+
+![Transformer Layer Latency](charts/rocm-transformer.png)
+
+| Configuration | FP32 (ms) | FP16 (ms) | FP16 + Flash Attn (ms) |
+|---------------|-----------|-----------|------------------------|
+| BERT-base (B=1, L=512) | 2.76 | 0.52 | 0.38 |
+| BERT-base (B=8, L=512) | 25.15 | 2.47 | 2.15 |
+| LLaMA-7B-like (B=1, L=2048) | 472.31 | 29.54 | 27.76 |
+
+> Flash attention is experimental on gfx1101 (enabled via `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1`). Performance gains are modest (~6-27%) but expected to improve with future ROCm releases.
+
+#### Conv2D Throughput
+
+![Conv2D Latency](charts/rocm-conv2d.png)
+
+| Configuration | Time (ms/iter) |
+|---------------|---------------|
+| ResNet first layer (B=32, 3->64, 224x224, k=7) | 2.18 |
+| ResNet mid layer (B=32, 256->256, 56x56, k=3) | 3.58 |
+| ResNet first layer (B=1) | 0.08 |
+| ResNet deep layer (B=8, 512->512, 28x28, k=3) | 0.92 |
+
+#### GPU Memory Bandwidth
+
+![GPU Memory Bandwidth](charts/rocm-memory-bandwidth.png)
+
+| Test | Bandwidth |
+|------|-----------|
+| **VRAM D2D copy (64 MB)** | 299.7 GB/s |
+| **VRAM D2D copy (256 MB)** | 304.1 GB/s |
+| **VRAM D2D copy (1 GB)** | 305.9 GB/s |
+| **PCIe H->D (pinned)** | 12.2–12.8 GB/s |
+| **PCIe D->H (pinned)** | 11.5–12.3 GB/s |
+
+Theoretical peak VRAM bandwidth is 432 GB/s (2248 MHz effective x 192-bit). The measured ~306 GB/s (71% efficiency) through a simple copy kernel is typical for a single-pass kernel without vectorized loads.
+
+> PCIe bandwidth of ~12 GB/s reflects PCIe 4.0 x16 operation (theoretical max ~25 GB/s bidirectional, ~13 GB/s unidirectional after protocol overhead).
+
 ### Summary
 
 ![Summary](charts/page-12.png)
@@ -120,6 +190,9 @@ Top scenes: texture 13,361 FPS, build (VBO) 12,409 FPS, shading 12,353 FPS.
 | fio | 3.39 | Disk I/O benchmarks |
 | glmark2-wayland | 2023.01 | OpenGL GPU benchmark |
 | btrfs scrub | kernel 6.14 | RAID5 real-disk throughput |
+| PyTorch | 2.9.1+rocm6.3 | ROCm GPU compute (GEMM, inference, transformer) |
+| ROCm | 6.4.0 | AMD GPU compute stack |
+| HIP | 6.4.0 | GPU memory bandwidth (hipMemcpy, kernel copy) |
 | Typst | 0.13.1 | Report generation (PDF) |
 
 ## Files
@@ -135,3 +208,5 @@ Top scenes: texture 13,361 FPS, build (VBO) 12,409 FPS, shading 12,353 FPS.
 - Kernel: 6.14.0-15-generic (PREEMPT_DYNAMIC)
 - CPU governor: default (schedutil)
 - No special tuning applied (no CPU pinning, no governor override, no drop_caches)
+- ROCm benchmarks run with `HSA_OVERRIDE_GFX_VERSION=11.0.1` (standard for gfx1101 GPUs)
+- Flash attention benchmarks used `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1`
