@@ -255,8 +255,50 @@ All 4 physical outputs on the GPU are occupied.
 )
 
 *Total local storage:* ~4.6 TB across 5 SSDs (all solid-state, no spinning disks). \
-*Root filesystem:* `/dev/sdb` — btrfs, 4.6 TB pool, 78% used (825 GB available). \
 *Network storage:* NAS at 10.0.0.50 + Wasabi cloud object storage.
+
+=== Btrfs RAID Configuration
+
+All 5 drives are pooled into a single btrfs filesystem:
+
+#table(
+  columns: (auto, auto, auto, auto),
+  inset: 8pt,
+  stroke: 0.5pt + brand-blue.lighten(80%),
+  fill: (x, y) => if y == 0 { brand-bg-blue } else if calc.odd(y) { brand-bg } else { white },
+  table.header(
+    [*Profile*], [*Level*], [*Total*], [*Used*],
+  ),
+  [Data], [RAID5], [2.86 TiB], [2.73 TiB (95.6%)],
+  [Metadata], [RAID1], [63.0 GiB], [55.8 GiB (88.5%)],
+  [System], [RAID1], [32.0 MiB], [208 KiB],
+)
+
+#v(0.3em)
+
+Per-device allocation:
+
+#table(
+  columns: (auto, auto, auto, auto, auto),
+  inset: 8pt,
+  stroke: 0.5pt + brand-blue.lighten(80%),
+  fill: (x, y) => if y == 0 { brand-bg-blue } else if calc.odd(y) { brand-bg } else { white },
+  table.header(
+    [*Device*], [*Size*], [*Used*], [*Unallocated*], [*I/O Errors*],
+  ),
+  [/dev/sdb], [894.3 GB], [733.0 GB], [161.3 GB], [0],
+  [/dev/sdc], [931.5 GB], [762.0 GB], [169.5 GB], [0],
+  [/dev/sda], [931.5 GB], [763.0 GB], [168.5 GB], [0],
+  [/dev/sdd], [931.5 GB], [763.0 GB], [168.5 GB], [0],
+  [/dev/nvme0n1p3], [930.0 GB], [760.0 GB], [170.0 GB], [0],
+)
+
+#v(0.3em)
+
+*Overall:* 4.51 TiB total, 3.69 TiB allocated, ~798 GiB free (estimated). \
+*Data ratio:* 1.25 (RAID5 with 5 drives — 80% usable capacity). \
+*Metadata ratio:* 2.00 (RAID1 — mirrored for reliability). \
+*Health:* Zero I/O errors across all devices.
 
 == Networking
 
