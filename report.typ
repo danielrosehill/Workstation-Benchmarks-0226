@@ -300,6 +300,29 @@ Per-device allocation:
 *Metadata ratio:* 2.00 (RAID1 — mirrored for reliability). \
 *Health:* Zero I/O errors across all devices.
 
+=== Mount Options
+
+```
+rw,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2
+```
+
+Key features: zstd level 3 transparent compression, SSD optimisations enabled, async TRIM/discard, space cache v2.
+
+=== Subvolume Layout
+
+#table(
+  columns: (auto, 1fr),
+  inset: 8pt,
+  stroke: 0.5pt + brand-blue.lighten(80%),
+  fill: (x, y) => if y == 0 { brand-bg-blue } else if calc.odd(y) { brand-bg } else { white },
+  table.header(
+    [*Subvolume*], [*Mount Point*],
+  ),
+  [\@], [`/` root],
+  [\@home], [/home],
+  [\@snapshots], [/.snapshots],
+)
+
 == Networking
 
 #table(
@@ -527,7 +550,9 @@ Sequential memory write operations with 1 MiB block size:
 
 == Disk I/O — fio
 
-All tests performed on the root filesystem (`/dev/sdb`, Kingston SA400S37, SATA SSD via btrfs). Direct I/O mode, 30-second duration per test.
+All tests performed on the btrfs RAID5 root filesystem (5-drive pool). Direct I/O mode with `libaio`, 30-second duration per test.
+
+_*Important note:* btrfs internally converts `O_DIRECT` to buffered I/O in many code paths, so even with `direct=1` and `drop_caches`, fio results may reflect kernel buffer performance rather than raw disk throughput. The btrfs scrub rate (see below) provides the most accurate measure of real disk read performance._
 
 === Sequential I/O (1 MiB block size, queue depth 1)
 
@@ -662,6 +687,67 @@ Selected scene results:
     )
   })
 ]
+
+== Btrfs RAID5 — Filesystem Benchmarks
+
+Real-world filesystem performance tests on the 5-drive btrfs RAID5 pool.
+
+=== Scrub Throughput
+
+A `btrfs scrub` reads and verifies every data and metadata block from the physical devices, bypassing all caches. This is the most accurate measure of sustained real disk read throughput across the RAID5 array.
+
+#table(
+  columns: (auto, 1fr),
+  inset: 8pt,
+  stroke: 0.5pt + brand-blue.lighten(80%),
+  fill: (x, y) => if y == 0 { brand-bg-blue } else if calc.odd(y) { brand-bg } else { white },
+  table.header(
+    [*Metric*], [*Value*],
+  ),
+  [Initial rate (5s)], [490 MiB/s],
+  [Sustained rate (60s)], [135 MiB/s],
+  [Data to verify], [2.84 TiB],
+  [Estimated full scrub time], [~6 hours],
+  [Errors found], [0],
+)
+
+The initial burst reflects cached/prefetched data. The sustained rate of ~135 MiB/s across RAID5 with parity verification is consistent with a 5-drive mixed SATA+NVMe pool under verification workload (scrub computes and checks parity for every stripe).
+
+=== Snapshot Operations
+
+#table(
+  columns: (auto, auto, auto),
+  inset: 8pt,
+  stroke: 0.5pt + brand-blue.lighten(80%),
+  fill: (x, y) => if y == 0 { brand-bg-blue } else if calc.odd(y) { brand-bg } else { white },
+  table.header(
+    [*Operation*], [*Time*], [*Notes*],
+  ),
+  [Create readonly snapshot], [0.680s], [Snapshot of root subvolume (\@)],
+  [Delete snapshot], [0.015s], [Immediate (no-commit)],
+)
+
+Snapshot creation is near-instant due to btrfs copy-on-write — no data is actually copied, only metadata is cloned.
+
+=== fio on btrfs (with cache effects)
+
+As noted in the Disk I/O section, fio results on btrfs include kernel buffer cache effects. For reference, the cache-assisted results were:
+
+#table(
+  columns: (auto, auto, auto),
+  inset: 8pt,
+  stroke: 0.5pt + brand-blue.lighten(80%),
+  fill: (x, y) => if y == 0 { brand-bg-blue } else if calc.odd(y) { brand-bg } else { white },
+  table.header(
+    [*Test*], [*Throughput*], [*IOPS*],
+  ),
+  [Seq Read 1M (QD16)], [7,744 MiB/s], [7,743],
+  [Seq Write 1M (QD16)], [6,875 MiB/s], [6,874],
+  [Random Read 4K (QD32×4)], [15.2 GiB/s], [3,979,000],
+  [Random Write 4K (QD32×4)], [4,688 MiB/s], [1,200,000],
+)
+
+_These numbers are primarily kernel buffer cache performance with btrfs+zstd compression, not raw disk speed._
 
 #pagebreak()
 
