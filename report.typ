@@ -1,8 +1,10 @@
 // Workstation Benchmark Report
 // Generated: 20-02-2026
-// Brand: DSR Holdings (dsrholdings.cloud)
 
-// --- Brand Palette ---
+#import "@preview/cetz:0.3.4"
+#import "@preview/cetz-plot:0.1.1": chart
+
+// --- Palette ---
 #let brand-blue    = rgb("#0369a1")
 #let brand-blue-dk = rgb("#024e7a")
 #let brand-blue-lt = rgb("#0ea5e9")
@@ -27,8 +29,6 @@
   header: context {
     if counter(page).get().first() > 1 [
       #set text(font: "IBM Plex Sans", size: 9pt, fill: brand-slate-5)
-      #text(weight: "bold", fill: brand-blue)[DSR]
-      #h(4pt)
       Workstation Benchmark Report
       #h(1fr)
       20-02-2026
@@ -40,7 +40,7 @@
     #set text(font: "IBM Plex Sans", size: 9pt, fill: brand-slate-5)
     #line(length: 100%, stroke: 0.5pt + brand-bg-tint)
     #v(2pt)
-    Daniel Rosehill — dsrholdings.cloud
+    Daniel Rosehill — danielrosehill.com
     #h(1fr)
     Page #counter(page).display() of #counter(page).final().first()
   ],
@@ -92,13 +92,9 @@
   #block(
     width: 85%,
     [
-      #text(size: 42pt, weight: "bold", fill: brand-blue)[DSR]
-      #v(-0.3cm)
-      #text(size: 11pt, fill: brand-slate-5, weight: "bold", tracking: 0.15em)[HOLDINGS]
-      #v(1cm)
       #line(length: 40%, stroke: 2pt + brand-blue-lt)
       #v(0.8cm)
-      #text(size: 26pt, weight: "bold", fill: brand-slate-9)[Workstation\ Benchmark Report]
+      #text(size: 28pt, weight: "bold", fill: brand-slate-9)[Workstation\ Benchmark Report]
       #v(0.5cm)
       #text(size: 13pt, fill: brand-slate-6)[Daniel Rosehill's Desktop Workstation]
       #v(0.3cm)
@@ -400,6 +396,29 @@ Prime computation benchmark (primes up to 20,000):
 
 *Multi-thread scaling ratio:* 11.2× (20 threads) — reflects the hybrid P+E core architecture where efficiency cores contribute less throughput per thread than performance cores.
 
+#v(0.5em)
+#align(center)[
+  #cetz.canvas({
+    import cetz.draw: *
+
+    chart.barchart(
+      size: (10, 3),
+      label-key: 0,
+      value-key: 1,
+      bar-width: 0.7,
+      (
+        ("Multi-thread (20T)", 15677),
+        ("Single-thread (1T)", 1399),
+      ),
+      bar-style: (i) => {
+        if i == 0 { (fill: brand-blue-lt, stroke: none) }
+        else { (fill: brand-blue, stroke: none) }
+      },
+      x-label: [Events / sec],
+    )
+  })
+]
+
 == CPU — stress-ng
 
 General CPU stress test across all computation methods (30 seconds, 20 workers):
@@ -441,6 +460,29 @@ Sequential memory write operations with 1 MiB block size:
 
 *Multi-thread scaling ratio:* 3.7× — memory bandwidth is shared across channels, so scaling is bounded by the dual-channel DDR5 memory controller rather than thread count.
 
+#v(0.5em)
+#align(center)[
+  #cetz.canvas({
+    import cetz.draw: *
+
+    chart.barchart(
+      size: (10, 3),
+      label-key: 0,
+      value-key: 1,
+      bar-width: 0.7,
+      (
+        ("Multi-thread (20T)", 128309),
+        ("Single-thread (1T)", 34644),
+      ),
+      bar-style: (i) => {
+        if i == 0 { (fill: brand-emerald.lighten(20%), stroke: none) }
+        else { (fill: brand-emerald, stroke: none) }
+      },
+      x-label: [MiB / sec],
+    )
+  })
+]
+
 == Disk I/O — fio
 
 All tests performed on the root filesystem (`/dev/sdb`, Kingston SA400S37, SATA SSD via btrfs). Direct I/O mode, 30-second duration per test.
@@ -476,6 +518,31 @@ _Note: These numbers substantially exceed the SATA III 6 Gb/s (~550 MB/s) theore
 )
 
 _Same caching note applies. The extremely high IOPS reflect kernel page cache hits. For raw device performance, a dedicated NVMe or SATA benchmark with drop_caches would be needed._
+
+#v(0.5em)
+#align(center)[
+  #cetz.canvas({
+    import cetz.draw: *
+
+    chart.barchart(
+      size: (10, 5),
+      label-key: 0,
+      value-key: 1,
+      bar-width: 0.7,
+      (
+        ("Rand Write 4K", 5335),
+        ("Rand Read 4K", 13027),
+        ("Seq Write 1M", 8483),
+        ("Seq Read 1M", 9636),
+      ),
+      bar-style: (i) => {
+        let colors = (brand-violet.lighten(30%), brand-violet, brand-blue-lt, brand-blue)
+        (fill: colors.at(i), stroke: none)
+      },
+      x-label: [MiB / sec],
+    )
+  })
+]
 
 == GPU — glmark2
 
@@ -519,6 +586,40 @@ Selected scene results:
   [terrain], [3,415], [0.293 ms],
   [buffer (map method)], [1,172], [0.853 ms],
 )
+
+#v(0.5em)
+#align(center)[
+  #cetz.canvas({
+    import cetz.draw: *
+
+    chart.barchart(
+      size: (10, 8),
+      label-key: 0,
+      value-key: 1,
+      bar-width: 0.7,
+      (
+        ("buffer (map)", 1172),
+        ("terrain", 3415),
+        ("refract", 5991),
+        ("desktop (blur)", 6400),
+        ("shadow", 10048),
+        ("jellyfish", 10494),
+        ("shading (Phong)", 11964),
+        ("bump (high-poly)", 12271),
+        ("build (VBO)", 12409),
+        ("texture (nearest)", 13361),
+      ),
+      bar-style: (i) => {
+        let t = i / 9
+        let r = int(3 * (1 - t) + 14 * t)
+        let g = int(105 * (1 - t) + 165 * t)
+        let b = int(161 * (1 - t) + 233 * t)
+        (fill: rgb(r, g, b), stroke: none)
+      },
+      x-label: [FPS],
+    )
+  })
+]
 
 #pagebreak()
 
